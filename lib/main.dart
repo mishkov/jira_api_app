@@ -64,27 +64,18 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  Future<List<String>>? _labelsFetchFuture;
-  String? _selectedLabel;
+  final _jqlController = TextEditingController(
+      text: 'project = "AS" AND labels = "MB" ORDER BY created DESC');
+  bool _isJqlValid = true;
+  String? _jqlError;
+
   var _samplingFrequency = SamplingFrequency.eachWeek;
 
   @override
   void initState() {
     super.initState();
 
-    _initJiraStats().then((_) {
-      _labelsFetchFuture = _getAvailableLabelsFuture();
-    });
-  }
-
-  Future<List<String>> _getAvailableLabelsFuture() async {
-    final future = _jiraStats!.getLabels();
-
-    future.then((labels) {
-      setState(() {});
-    });
-
-    return future;
+    _initJiraStats();
   }
 
   @override
@@ -105,14 +96,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchStats() async {
-    if (_selectedLabel == null) {
-      _showMessage('Ошибка! Метка не выбрана');
+    setState(() {
+      _jqlError = null;
+    });
+    final errors = await _jiraStats!.validateJql(_jqlController.text);
+
+    setState(() {
+      _isJqlValid = errors.isEmpty;
+      if (!_isJqlValid) {
+        _jqlError = errors.join('. ');
+      }
+    });
+
+    if (!_isJqlValid) {
+      _showMessage('Ошибка! запрос невалиден!');
       return;
     }
 
     setState(() {
-      _resultFuture = _jiraStats!.getTotalEstimationFor(
-        label: _selectedLabel!,
+      _resultFuture = _jiraStats!.getTotalEstimationByJql(
+        _jqlController.text,
         weeksAgoCount: 40,
         frequency: _samplingFrequency,
       );
@@ -174,74 +177,38 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final calculateButton = ElevatedButton(
-      onPressed: _selectedLabel == null ? null : _fetchStats,
-      child: const Text('Посчитать'),
-    );
-
-    final searchParameters = Column(
+    final samplingFrequency = Row(
       children: [
-        FutureBuilder<List<String>>(
-          future: _labelsFetchFuture,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              final labels = snapshot.data!;
-              return DropdownButton(
-                value: _selectedLabel,
-                hint: const Text('Метка'),
-                items: labels.map((label) {
-                  return DropdownMenuItem<String>(
-                    value: label,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: (label) {
-                  setState(() {
-                    _selectedLabel = label;
-                  });
-                },
-              );
-            } else if (snapshot.hasError) {
-              return Text(snapshot.error.toString());
-            } else {
-              return const CircularProgressIndicator.adaptive();
-            }
-          },
-        ),
         Row(
           children: [
-            Row(
-              children: [
-                Radio<SamplingFrequency>(
-                  value: SamplingFrequency.eachDay,
-                  groupValue: _samplingFrequency,
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _samplingFrequency = value;
-                      });
-                    }
-                  },
-                ),
-                const Text('Каждый день'),
-              ],
+            Radio<SamplingFrequency>(
+              value: SamplingFrequency.eachDay,
+              groupValue: _samplingFrequency,
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _samplingFrequency = value;
+                  });
+                }
+              },
             ),
-            Row(children: [
-              Radio<SamplingFrequency>(
-                value: SamplingFrequency.eachWeek,
-                groupValue: _samplingFrequency,
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _samplingFrequency = value;
-                    });
-                  }
-                },
-              ),
-              const Text('Каждую неделю')
-            ]),
+            const Text('Каждый день'),
           ],
         ),
+        Row(children: [
+          Radio<SamplingFrequency>(
+            value: SamplingFrequency.eachWeek,
+            groupValue: _samplingFrequency,
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _samplingFrequency = value;
+                });
+              }
+            },
+          ),
+          const Text('Каждую неделю')
+        ]),
       ],
     );
 
@@ -282,12 +249,29 @@ class _HomePageState extends State<HomePage> {
           children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: searchParameters,
+                  SizedBox(
+                    height: 50,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: JqlField(
+                            jqlController: _jqlController,
+                            onSubmitted: () {
+                              _fetchStats();
+                            },
+                            error: _jqlError,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        CalculateButton(onPressed: _fetchStats),
+                      ],
+                    ),
                   ),
-                  calculateButton,
+                  samplingFrequency,
                 ],
               ),
             ),
@@ -305,8 +289,22 @@ class _HomePageState extends State<HomePage> {
               width: 400,
               child: Column(
                 children: [
-                  searchParameters,
-                  calculateButton,
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: JqlField(
+                      jqlController: _jqlController,
+                      onSubmitted: () {
+                        _fetchStats();
+                      },
+                      error: _jqlError,
+                      isMultiLine: true,
+                    ),
+                  ),
+                  samplingFrequency,
+                  CalculateButton(
+                    onPressed: _fetchStats,
+                    inVerticalOrientation: true,
+                  ),
                   const Spacer(),
                   statusesCategories,
                 ],
@@ -322,6 +320,65 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     });
+  }
+}
+
+class JqlField extends StatelessWidget {
+  const JqlField({
+    super.key,
+    required this.jqlController,
+    required this.onSubmitted,
+    required this.error,
+    this.isMultiLine = false,
+  });
+
+  final TextEditingController jqlController;
+  final void Function() onSubmitted;
+  final String? error;
+  final bool isMultiLine;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: jqlController,
+      onSubmitted: (_) {
+        onSubmitted;
+      },
+      maxLines: isMultiLine ? null : 1,
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        errorText: error,
+      ),
+    );
+  }
+}
+
+class CalculateButton extends StatelessWidget {
+  const CalculateButton({
+    super.key,
+    required this.onPressed,
+    this.inVerticalOrientation = false,
+  });
+
+  final void Function()? onPressed;
+  final bool inVerticalOrientation;
+
+  @override
+  Widget build(BuildContext context) {
+    final String text;
+    if (inVerticalOrientation) {
+      text = 'Посчитать Статистику';
+    } else {
+      text = 'Посчитать\nСтатистику';
+    }
+
+    return ElevatedButton(
+      onPressed: onPressed,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 }
 
