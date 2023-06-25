@@ -64,9 +64,9 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  List<String>? _availableLabels;
   Future<List<String>>? _labelsFetchFuture;
   String? _selectedLabel;
+  var _samplingFrequency = SamplingFrequency.eachWeek;
 
   @override
   void initState() {
@@ -81,9 +81,7 @@ class _HomePageState extends State<HomePage> {
     final future = _jiraStats!.getLabels();
 
     future.then((labels) {
-      setState(() {
-        _availableLabels = labels;
-      });
+      setState(() {});
     });
 
     return future;
@@ -116,6 +114,7 @@ class _HomePageState extends State<HomePage> {
       _resultFuture = _jiraStats!.getTotalEstimationFor(
         label: _selectedLabel!,
         weeksAgoCount: 40,
+        frequency: _samplingFrequency,
       );
     });
 
@@ -180,32 +179,70 @@ class _HomePageState extends State<HomePage> {
       child: const Text('Посчитать'),
     );
 
-    var searchParameters = FutureBuilder<List<String>>(
-      future: _labelsFetchFuture,
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          final labels = snapshot.data!;
-          return DropdownButton(
-            value: _selectedLabel,
-            hint: const Text('Метка'),
-            items: labels.map((label) {
-              return DropdownMenuItem<String>(
-                value: label,
-                child: Text(label),
+    final searchParameters = Column(
+      children: [
+        FutureBuilder<List<String>>(
+          future: _labelsFetchFuture,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              final labels = snapshot.data!;
+              return DropdownButton(
+                value: _selectedLabel,
+                hint: const Text('Метка'),
+                items: labels.map((label) {
+                  return DropdownMenuItem<String>(
+                    value: label,
+                    child: Text(label),
+                  );
+                }).toList(),
+                onChanged: (label) {
+                  setState(() {
+                    _selectedLabel = label;
+                  });
+                },
               );
-            }).toList(),
-            onChanged: (label) {
-              setState(() {
-                _selectedLabel = label;
-              });
-            },
-          );
-        } else if (snapshot.hasError) {
-          return Text(snapshot.error.toString());
-        } else {
-          return const CircularProgressIndicator.adaptive();
-        }
-      },
+            } else if (snapshot.hasError) {
+              return Text(snapshot.error.toString());
+            } else {
+              return const CircularProgressIndicator.adaptive();
+            }
+          },
+        ),
+        Row(
+          children: [
+            Row(
+              children: [
+                Radio<SamplingFrequency>(
+                  value: SamplingFrequency.eachDay,
+                  groupValue: _samplingFrequency,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _samplingFrequency = value;
+                      });
+                    }
+                  },
+                ),
+                const Text('Каждый день'),
+              ],
+            ),
+            Row(children: [
+              Radio<SamplingFrequency>(
+                value: SamplingFrequency.eachWeek,
+                groupValue: _samplingFrequency,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _samplingFrequency = value;
+                    });
+                  }
+                },
+              ),
+              const Text('Каждую неделю')
+            ]),
+          ],
+        ),
+      ],
     );
 
     final stats = FutureBuilder<EstimationResults>(
