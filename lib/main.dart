@@ -64,11 +64,29 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
+  List<String>? _availableLabels;
+  Future<List<String>>? _labelsFetchFuture;
+  String? _selectedLabel;
+
   @override
   void initState() {
     super.initState();
 
-    _initJiraStats();
+    _initJiraStats().then((_) {
+      _labelsFetchFuture = _getAvailableLabelsFuture();
+    });
+  }
+
+  Future<List<String>> _getAvailableLabelsFuture() async {
+    final future = _jiraStats!.getLabels();
+
+    future.then((labels) {
+      setState(() {
+        _availableLabels = labels;
+      });
+    });
+
+    return future;
   }
 
   @override
@@ -80,17 +98,28 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _initJiraStats() async {
     await dotenv.load(fileName: 'assets/.env');
-    final jiraStats = JiraStats(
+    _jiraStats = JiraStats(
       user: dotenv.env['USER_NAME']!,
       apiToken: dotenv.env['API_TOKEN']!,
     );
 
-    await jiraStats.initialize();
+    await _jiraStats!.initialize();
+  }
 
-    final results = await jiraStats.getTotalEstimationFor(
-      label: 'MB',
-      weeksAgoCount: 40,
-    );
+  Future<void> _fetchStats() async {
+    if (_selectedLabel == null) {
+      _showMessage('Ошибка! Метка не выбрана');
+      return;
+    }
+
+    setState(() {
+      _resultFuture = _jiraStats!.getTotalEstimationFor(
+        label: _selectedLabel!,
+        weeksAgoCount: 40,
+      );
+    });
+
+    final results = await _resultFuture!;
 
     for (final record in results.datedGroups) {
       final categorisedEstimation = <EstimatedGroup>[];
@@ -138,68 +167,136 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: FutureBuilder<EstimationResults>(
-          future: _resultFuture,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return Column(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
                 children: [
-                  Expanded(
-                    child: EstimatinoResultsView(results: snapshot.data!),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _statusesCategoris.length,
-                      itemBuilder: (context, index) {
-                        return ColoredBox(
-                          color: index.isEven
-                              ? Colors.grey.shade300
-                              : Colors.transparent,
-                          child: Row(
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    _statusesCategoris[index]
-                                        .customIssueStatus
-                                        .name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Text('Включает'),
-                                ],
-                              ),
-                              const Spacer(),
-                              Text(
-                                _statusesCategoris[index]
-                                    .statusesNames
-                                    .join(', '),
-                              ),
-                            ],
-                          ),
+                  FutureBuilder<List<String>>(
+                    future: _labelsFetchFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        final labels = snapshot.data!;
+                        return DropdownButton(
+                          value: _selectedLabel,
+                          hint: const Text('Метка'),
+                          items: labels.map((label) {
+                            return DropdownMenuItem<String>(
+                              value: label,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: (label) {
+                            setState(() {
+                              _selectedLabel = label;
+                            });
+                          },
                         );
-                      },
-                    ),
-                  )
+                      } else if (snapshot.hasError) {
+                        return Text(snapshot.error.toString());
+                      } else {
+                        return const CircularProgressIndicator.adaptive();
+                      }
+                    },
+                  ),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _selectedLabel == null ? null : _fetchStats,
+                    child: const Text('Посчитать'),
+                  ),
                 ],
-              );
-            } else if (snapshot.hasError) {
-              return Text(snapshot.error.toString());
-            } else {
-              return const CircularProgressIndicator.adaptive();
-            }
-          },
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<EstimationResults>(
+                future: _resultFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: EstimatinoResultsView(results: snapshot.data!),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: StatusesCategoiesView(
+                            statusesCategoris: _statusesCategoris,
+                          ),
+                        ),
+                      ],
+                    );
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text(snapshot.error.toString()));
+                  } else if (snapshot.connectionState == ConnectionState.none) {
+                    return const Center(
+                      child: Text(
+                        'Нажмите "Посчитать" для сбора статистики',
+                      ),
+                    );
+                  }
+                  {
+                    return const CircularProgressIndicator.adaptive();
+                  }
+                },
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class StatusesCategoiesView extends StatelessWidget {
+  const StatusesCategoiesView({
+    super.key,
+    required List<StatusesCategory> statusesCategoris,
+  }) : _statusesCategoris = statusesCategoris;
+
+  final List<StatusesCategory> _statusesCategoris;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _statusesCategoris.length,
+      itemBuilder: (context, index) {
+        return ColoredBox(
+          color: index.isEven ? Colors.grey.shade300 : Colors.transparent,
+          child: Row(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    _statusesCategoris[index].customIssueStatus.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Включает'),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                _statusesCategoris[index].statusesNames.join(', '),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
