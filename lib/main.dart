@@ -175,89 +175,116 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
+    final calculateButton = ElevatedButton(
+      onPressed: _selectedLabel == null ? null : _fetchStats,
+      child: const Text('Посчитать'),
+    );
+
+    var searchParameters = FutureBuilder<List<String>>(
+      future: _labelsFetchFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final labels = snapshot.data!;
+          return DropdownButton(
+            value: _selectedLabel,
+            hint: const Text('Метка'),
+            items: labels.map((label) {
+              return DropdownMenuItem<String>(
+                value: label,
+                child: Text(label),
+              );
+            }).toList(),
+            onChanged: (label) {
+              setState(() {
+                _selectedLabel = label;
+              });
+            },
+          );
+        } else if (snapshot.hasError) {
+          return Text(snapshot.error.toString());
+        } else {
+          return const CircularProgressIndicator.adaptive();
+        }
+      },
+    );
+
+    final stats = FutureBuilder<EstimationResults>(
+      future: _resultFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData) {
+          return EstimatinoResultsView(results: snapshot.data!);
+        } else if (snapshot.hasError) {
+          return Center(child: Text(snapshot.error.toString()));
+        } else if (snapshot.connectionState == ConnectionState.none) {
+          return const Center(
+            child: Text(
+              'Нажмите "Посчитать" для сбора статистики',
+            ),
+          );
+        } else if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator.adaptive());
+        } else {
+          return const Text('Что-то пошло не так');
+        }
+      },
+    );
+
+    final statusesCategories = Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: StatusesCategoiesView(
+        statusesCategoris: _statusesCategoris,
+      ),
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isVertical = (constraints.maxWidth / constraints.maxHeight) < 2;
+      Widget content;
+      if (isVertical) {
+        content = Column(
           children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
                 children: [
-                  FutureBuilder<List<String>>(
-                    future: _labelsFetchFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        final labels = snapshot.data!;
-                        return DropdownButton(
-                          value: _selectedLabel,
-                          hint: const Text('Метка'),
-                          items: labels.map((label) {
-                            return DropdownMenuItem<String>(
-                              value: label,
-                              child: Text(label),
-                            );
-                          }).toList(),
-                          onChanged: (label) {
-                            setState(() {
-                              _selectedLabel = label;
-                            });
-                          },
-                        );
-                      } else if (snapshot.hasError) {
-                        return Text(snapshot.error.toString());
-                      } else {
-                        return const CircularProgressIndicator.adaptive();
-                      }
-                    },
+                  Expanded(
+                    child: searchParameters,
                   ),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: _selectedLabel == null ? null : _fetchStats,
-                    child: const Text('Посчитать'),
-                  ),
+                  calculateButton,
                 ],
               ),
             ),
             Expanded(
-              child: FutureBuilder<EstimationResults>(
-                future: _resultFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      snapshot.hasData) {
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: EstimatinoResultsView(results: snapshot.data!),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: StatusesCategoiesView(
-                            statusesCategoris: _statusesCategoris,
-                          ),
-                        ),
-                      ],
-                    );
-                  } else if (snapshot.hasError) {
-                    return Center(child: Text(snapshot.error.toString()));
-                  } else if (snapshot.connectionState == ConnectionState.none) {
-                    return const Center(
-                      child: Text(
-                        'Нажмите "Посчитать" для сбора статистики',
-                      ),
-                    );
-                  } else if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return const CircularProgressIndicator.adaptive();
-                  } else {
-                    return const Text('Что-то пошло не так');
-                  }
-                },
+              child: stats,
+            ),
+            statusesCategories,
+          ],
+        );
+      } else {
+        content = Row(
+          children: [
+            Expanded(child: stats),
+            SizedBox(
+              width: 400,
+              child: Column(
+                children: [
+                  searchParameters,
+                  calculateButton,
+                  const Spacer(),
+                  statusesCategories,
+                ],
               ),
             ),
           ],
+        );
+      }
+
+      return Scaffold(
+        body: SafeArea(
+          child: Center(child: content),
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -271,10 +298,13 @@ class StatusesCategoiesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
+    return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _statusesCategoris.length,
+      separatorBuilder: (context, index) {
+        return const SizedBox(height: 3.0);
+      },
       itemBuilder: (context, index) {
         return ColoredBox(
           color: index.isEven ? Colors.grey.shade300 : Colors.transparent,
@@ -289,12 +319,31 @@ class StatusesCategoiesView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Text('Включает'),
+                  const Text('Включает:'),
                 ],
               ),
-              const Spacer(),
-              Text(
-                _statusesCategoris[index].statusesNames.join(', '),
+              Expanded(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 3.0,
+                  runSpacing: 3.0,
+                  children: _statusesCategoris[index].statusesNames.map(
+                    (e) {
+                      return Container(
+                        decoration: BoxDecoration(
+                            color: Theme.of(context).primaryColor,
+                            borderRadius: BorderRadius.circular(3.0)),
+                        padding: const EdgeInsets.all(3.0),
+                        child: Text(
+                          e,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        ),
+                      );
+                    },
+                  ).toList(),
+                ),
               ),
             ],
           ),
