@@ -222,7 +222,8 @@ class _HomePageState extends State<HomePage> {
               child: FutureBuilder<EstimationResults>(
                 future: _resultFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.hasData) {
+                  if (snapshot.connectionState == ConnectionState.done &&
+                      snapshot.hasData) {
                     return Column(
                       children: [
                         Expanded(
@@ -244,9 +245,11 @@ class _HomePageState extends State<HomePage> {
                         'Нажмите "Посчитать" для сбора статистики',
                       ),
                     );
-                  }
-                  {
+                  } else if (snapshot.connectionState ==
+                      ConnectionState.waiting) {
                     return const CircularProgressIndicator.adaptive();
+                  } else {
+                    return const Text('Что-то пошло не так');
                   }
                 },
               ),
@@ -320,12 +323,12 @@ class EstimatinoResultsView extends StatelessWidget {
         }));
     });
 
-    List<LineSeries<GroupedIssuesRecord, int>> series = [];
+    List<LineSeries<GroupedIssuesRecord, String>> series = [];
 
     for (final status in allStatus) {
       series.add(
         LineSeries(
-          dataSource: results.datedGroups,
+          dataSource: results.datedGroups.reversed.toList(),
           dataLabelMapper: (datum, index) {
             const dateFormat = 'yyyy-MM-dd';
 
@@ -334,12 +337,16 @@ class EstimatinoResultsView extends StatelessWidget {
           },
           name: status.name,
           xAxisName: 'Дата',
+          isVisible: true,
           yAxisName: 'Story Points',
           isVisibleInLegend: true,
-          xValueMapper: (GroupedIssuesRecord record, _) {
-            return record.date.millisecondsSinceEpoch;
+          xValueMapper: (record, value) {
+            const dateFormat = 'yyyy-MM-dd';
+
+            final formatter = DateFormat(dateFormat);
+            return formatter.format(record.date);
           },
-          yValueMapper: (GroupedIssuesRecord record, _) {
+          yValueMapper: (record, value) {
             final estimatedGroup = record.groupedEstimations
                 .where((element) => element.groupStatus == status);
 
@@ -355,6 +362,21 @@ class EstimatinoResultsView extends StatelessWidget {
         position: LegendPosition.bottom,
         overflowMode: LegendItemOverflowMode.wrap,
       ),
+      primaryXAxis: CategoryAxis(
+        title: AxisTitle(
+          text: 'Дата',
+        ),
+        labelRotation: 45,
+      ),
+      primaryYAxis: NumericAxis(
+        title: AxisTitle(text: 'Story Points'),
+      ),
+      zoomPanBehavior: ZoomPanBehavior(
+          enablePanning: true,
+          enablePinching: true,
+          enableMouseWheelZooming: true,
+          zoomMode: ZoomMode.x),
+      tooltipBehavior: TooltipBehavior(enable: true),
       series: series,
     );
   }
