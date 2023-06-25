@@ -39,12 +39,23 @@ class StatusesCategory {
     required this.customIssueStatus,
     required this.statusesNames,
   });
+
+  StatusesCategory clone() {
+    return StatusesCategory(
+      customIssueStatus: IssueStatus(
+        id: customIssueStatus.id,
+        name: customIssueStatus.name,
+      ),
+      statusesNames: List.from(statusesNames),
+    );
+  }
 }
 
 class _HomePageState extends State<HomePage> {
   JiraStats? _jiraStats;
-  Future<EstimationResults>? _resultFuture;
-  final List<StatusesCategory> _statusesCategoris = [
+  Future<EstimationResults>? _rawResultsFuture;
+  Future<EstimationResults>? _results;
+  List<StatusesCategory> _statusesCategoris = [
     StatusesCategory(
       customIssueStatus:
           IssueStatus(id: const Uuid().v1(), name: 'К Выполнению'),
@@ -114,16 +125,24 @@ class _HomePageState extends State<HomePage> {
     }
 
     setState(() {
-      _resultFuture = _jiraStats!.getTotalEstimationByJql(
+      _rawResultsFuture = _jiraStats!.getTotalEstimationByJql(
         _jqlController.text,
         weeksAgoCount: 40,
         frequency: _samplingFrequency,
       );
     });
 
-    final results = await _resultFuture!;
+    await _groupEstimationByCategories();
+  }
 
-    for (final record in results.datedGroups) {
+  Future<void> _groupEstimationByCategories() async {
+    setState(() {
+      _results = _rawResultsFuture!;
+    });
+
+    final copy = (await _results!).clone();
+
+    for (final record in copy.datedGroups) {
       final categorisedEstimation = <EstimatedGroup>[];
       for (final estimationGroup in record.groupedEstimations) {
         final possibleCategories = _statusesCategoris.where((category) {
@@ -165,7 +184,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     setState(() {
-      _resultFuture = Future.value(results);
+      _results = Future.value(copy);
     });
   }
 
@@ -213,7 +232,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     final stats = FutureBuilder<EstimationResults>(
-      future: _resultFuture,
+      future: _results,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
             snapshot.hasData) {
@@ -238,6 +257,14 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.all(8.0),
       child: StatusesCategoiesView(
         statusesCategoris: _statusesCategoris,
+        onCategoriesUpdated: (categoris) {
+          setState(() {
+            _statusesCategoris = categoris;
+            if (_rawResultsFuture != null) {
+              _groupEstimationByCategories();
+            }
+          });
+        },
       ),
     );
 
@@ -382,67 +409,165 @@ class CalculateButton extends StatelessWidget {
   }
 }
 
-class StatusesCategoiesView extends StatelessWidget {
+class StatusesCategoiesView extends StatefulWidget {
   const StatusesCategoiesView({
     super.key,
-    required List<StatusesCategory> statusesCategoris,
-  }) : _statusesCategoris = statusesCategoris;
+    required this.statusesCategoris,
+    this.onCategoriesUpdated,
+  });
 
-  final List<StatusesCategory> _statusesCategoris;
+  final List<StatusesCategory> statusesCategoris;
+  final void Function(List<StatusesCategory> categoris)? onCategoriesUpdated;
+
+  @override
+  State<StatusesCategoiesView> createState() => _StatusesCategoiesViewState();
+}
+
+class _StatusesCategoiesViewState extends State<StatusesCategoiesView> {
+  List<StatusesCategory>? _updatedCategoris;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _statusesCategoris.length,
-      separatorBuilder: (context, index) {
-        return const SizedBox(height: 3.0);
-      },
-      itemBuilder: (context, index) {
-        return ColoredBox(
-          color: index.isEven ? Colors.grey.shade300 : Colors.transparent,
-          child: Row(
-            children: [
-              Row(
-                children: [
-                  Text(
-                    _statusesCategoris[index].customIssueStatus.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Text('Включает:'),
-                ],
-              ),
-              Expanded(
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 3.0,
-                  runSpacing: 3.0,
-                  children: _statusesCategoris[index].statusesNames.map(
-                    (e) {
-                      return Container(
-                        decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor,
-                            borderRadius: BorderRadius.circular(3.0)),
-                        padding: const EdgeInsets.all(3.0),
-                        child: Text(
-                          e,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimary,
+    final categories = _updatedCategoris ?? widget.statusesCategoris;
+
+    return Column(
+      children: [
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: categories.length,
+          separatorBuilder: (context, index) {
+            return const SizedBox(height: 3.0);
+          },
+          itemBuilder: (context, index) {
+            return DragTarget(
+              onAccept: (data) {
+                if (data is! String) {
+                  return;
+                }
+
+                setState(() {
+                  _updatedCategoris![index].statusesNames.add(data);
+                });
+              },
+              builder: (context, candidateItems, rejectedItems) => ColoredBox(
+                color: index.isEven ? Colors.grey.shade300 : Colors.transparent,
+                child: Row(
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          categories[index].customIssueStatus.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
-                  ).toList(),
+                        const SizedBox(width: 4),
+                        const Text('Включает:'),
+                      ],
+                    ),
+                    Expanded(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 3.0,
+                        runSpacing: 3.0,
+                        children: categories[index].statusesNames.map(
+                          (e) {
+                            return Draggable(
+                              data: e,
+                              onDragStarted: () {
+                                setState(() {
+                                  _updatedCategoris ??=
+                                      widget.statusesCategoris.map((e) {
+                                    return e.clone();
+                                  }).toList();
+                                });
+                              },
+                              onDragEnd: (details) {
+                                if (details.wasAccepted) {
+                                  setState(() {
+                                    categories[index]
+                                        .statusesNames
+                                        .remove(e);
+                                  });
+                                }
+                              },
+                              feedback: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).primaryColor,
+                                  borderRadius: BorderRadius.circular(3.0),
+                                ),
+                                padding: const EdgeInsets.all(3.0),
+                                child: Text(
+                                  e,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium!
+                                      .copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                      ),
+                                ),
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).primaryColor,
+                                  borderRadius: BorderRadius.circular(3.0),
+                                ),
+                                padding: const EdgeInsets.all(3.0),
+                                child: Text(
+                                  e,
+                                  style: TextStyle(
+                                    color:
+                                        Theme.of(context).colorScheme.onPrimary,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ).toList(),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Visibility(
+          visible: _updatedCategoris != null,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton(
+                style: const ButtonStyle(
+                  backgroundColor: MaterialStatePropertyAll(Colors.red),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _updatedCategoris = null;
+                  });
+                },
+                child: const Text('Отмена'),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: () {
+                  if (widget.onCategoriesUpdated != null) {
+                    widget.onCategoriesUpdated!(_updatedCategoris!);
+                  }
+                  setState(() {
+                    _updatedCategoris = null;
+                  });
+                },
+                child: const Text('Применить'),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
