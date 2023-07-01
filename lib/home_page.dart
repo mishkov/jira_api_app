@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:jira_api/jira_api.dart';
@@ -60,6 +58,9 @@ class _HomePageState extends State<HomePage> {
   String _storyPointsField = 'customfield_10016';
 
   final _localStorage = LocalStorage();
+
+  bool _isConsoleExpanded = false;
+  final List<String> _consoleMessages = [];
 
   @override
   void initState() {
@@ -140,6 +141,10 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _groupEstimationByCategories() async {
     setState(() {
+      _consoleMessages.clear();
+    });
+
+    setState(() {
       _results = _rawResultsFuture!;
     });
 
@@ -154,12 +159,18 @@ class _HomePageState extends State<HomePage> {
         });
 
         if (possibleCategories.isEmpty) {
-          log('${estimationGroup.groupStatus.name} is not found in available categories');
+          setState(() {
+            _consoleMessages.add(
+                'Status "${estimationGroup.groupStatus.name}" is not found in available categories');
+          });
           continue;
         }
 
         if (possibleCategories.length > 1) {
-          log('found more than one ${estimationGroup.groupStatus.name}');
+          setState(() {
+            _consoleMessages.add(
+                'found more than one "${estimationGroup.groupStatus.name}" status');
+          });
           continue;
         }
 
@@ -266,6 +277,55 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
+    final Widget console = ExpansionPanelList(
+      elevation: 0.0,
+      expansionCallback: (panelIndex, isExpanded) {
+        setState(() {
+          _isConsoleExpanded = !isExpanded;
+        });
+      },
+      children: [
+        ExpansionPanel(
+          canTapOnHeader: true,
+          isExpanded: _isConsoleExpanded,
+          backgroundColor: Colors.amber.withOpacity(0.3),
+          headerBuilder: (context, isExpanded) {
+            return const Padding(
+              padding: EdgeInsets.only(left: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Console output'),
+              ),
+            );
+          },
+          body: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _consoleMessages.length,
+              itemBuilder: (context, index) {
+                Widget widget = Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 2.0,
+                  ),
+                  child: SelectableText(_consoleMessages[index]),
+                );
+                if (index.isEven) {
+                  widget = Container(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: widget,
+                  );
+                }
+
+                return widget;
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+
     return LayoutBuilder(builder: (context, constraints) {
       final isVertical = (constraints.maxWidth / constraints.maxHeight) < 2;
       Widget content;
@@ -316,6 +376,7 @@ class _HomePageState extends State<HomePage> {
               child: stats,
             ),
             statusesCategories,
+            console,
           ],
         );
       } else {
@@ -362,6 +423,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const Spacer(),
                   statusesCategories,
+                  console,
                 ],
               ),
             ),
