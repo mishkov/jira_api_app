@@ -94,16 +94,24 @@ class _HomePageState extends State<HomePage> {
     if (_storyPointsField.isEmpty) {
       showMessage(context,
           'Story points field is required. Please navigate to settings and specify it');
+
+      return;
     }
 
     try {
       await widget.jiraStats.validateStoryPoitnsField(_storyPointsField);
     } on FieldNotFoundException catch (_) {
       showMessage(context, 'Story points field not found');
+
+      return;
     } on InvalidFieldTypeException catch (_) {
       showMessage(context, 'Invalid field type. Must be number');
+
+      return;
     } catch (e) {
       showMessage(context, 'Unexpected error. Cannot verify field');
+
+      return;
     }
 
     _localStorage.putJqlQuery(_jqlController.text);
