@@ -29,7 +29,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Future<EstimationResults>? _rawResultsFuture;
   Future<EstimationResults>? _results;
-  List<StatusesCategory> _defaultStatusesCategoris = [
+  final _defaultStatusesCategoris = [
     StatusesCategory(
       customIssueStatus:
           IssueStatus(id: const Uuid().v1(), name: 'К Выполнению'),
