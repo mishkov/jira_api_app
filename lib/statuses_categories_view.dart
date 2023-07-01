@@ -106,12 +106,41 @@ class _StatusesCategoriesViewState extends State<StatusesCategoriesView> {
                                   borderRadius: BorderRadius.circular(3.0),
                                 ),
                                 padding: const EdgeInsets.all(3.0),
-                                child: Text(
-                                  e,
-                                  style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.onPrimary,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      iconSize: 14,
+                                      onPressed: () {
+                                        setState(() {
+                                          _updatedCategoris ??=
+                                              widget.statusesCategoris.map((e) {
+                                            return e.clone();
+                                          }).toList();
+                                        });
+
+                                        _updatedCategoris![index]
+                                            .statusesNames
+                                            .remove(e);
+                                      },
+                                      icon: Icon(
+                                        Icons.close,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      e,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
