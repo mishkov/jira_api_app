@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:jira_api_app/statuses_category.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalStorage {
@@ -5,7 +8,8 @@ class LocalStorage {
   final _apiTokenKey = 'apiToken';
   final _accountNameKey = 'accountName';
   final _storyPointsField = 'storyPointsFieldName';
-  final _jqlQuery = 'jqlQuery';
+  final _jqlQueryKey = 'jqlQuery';
+  final _statusesCategoriesKey = 'statusesCategories';
 
   SharedPreferences? _prefs;
 
@@ -82,7 +86,7 @@ class LocalStorage {
       UninitializedLocalStorageException();
     }
 
-    await _prefs!.setString(_jqlQuery, jql);
+    await _prefs!.setString(_jqlQueryKey, jql);
   }
 
   Future<String?> getJqlQuery() async {
@@ -90,7 +94,41 @@ class LocalStorage {
       UninitializedLocalStorageException();
     }
 
-    return _prefs!.getString(_jqlQuery);
+    return _prefs!.getString(_jqlQueryKey);
+  }
+
+  Future<void> putStatusesCategories(List<StatusesCategory> categories) async {
+    if (_prefs == null) {
+      UninitializedLocalStorageException();
+    }
+
+    final convertedCategories = categories.map((e) => e.toMap()).toList();
+
+    await _prefs!.setString(
+      _statusesCategoriesKey,
+      json.encode(convertedCategories),
+    );
+  }
+
+  Future<List<StatusesCategory>?> getStatusesCategories() async {
+    if (_prefs == null) {
+      UninitializedLocalStorageException();
+    }
+
+    final rawString = _prefs!.getString(_statusesCategoriesKey);
+
+    if (rawString == null) {
+      return null;
+    }
+
+    final rawCategories = json.decode(rawString);
+    final List<StatusesCategory> categories = [];
+
+    for (final rawCategory in rawCategories) {
+      categories.add(StatusesCategory.fromMap(rawCategory));
+    }
+
+    return categories;
   }
 }
 

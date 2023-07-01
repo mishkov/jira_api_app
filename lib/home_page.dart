@@ -29,7 +29,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Future<EstimationResults>? _rawResultsFuture;
   Future<EstimationResults>? _results;
-  List<StatusesCategory> _statusesCategoris = [
+  List<StatusesCategory> _defaultStatusesCategoris = [
     StatusesCategory(
       customIssueStatus:
           IssueStatus(id: const Uuid().v1(), name: 'К Выполнению'),
@@ -48,6 +48,8 @@ class _HomePageState extends State<HomePage> {
       statusesNames: ['FAIL', 'rejected'],
     ),
   ];
+
+  List<StatusesCategory> _statusesCategoris = [];
 
   final _jqlController = TextEditingController();
   bool _isJqlValid = true;
@@ -75,6 +77,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _tryLoadSettingsAndSearchQuery() async {
     _storyPointsField = await _localStorage.getStoryPointsField() ?? '';
     _jqlController.text = await _localStorage.getJqlQuery() ?? '';
+    _statusesCategoris = await _localStorage.getStatusesCategories() ??
+        _defaultStatusesCategoris;
     setState(() {});
   }
 
@@ -100,7 +104,7 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       showMessage(context, 'Unexpected error. Cannot verify field');
     }
-    
+
     _localStorage.putJqlQuery(_jqlController.text);
 
     setState(() {
@@ -253,6 +257,7 @@ class _HomePageState extends State<HomePage> {
         onCategoriesUpdated: (categoris) {
           setState(() {
             _statusesCategoris = categoris;
+            _localStorage.putStatusesCategories(categoris);
             if (_rawResultsFuture != null) {
               _groupEstimationByCategories();
             }
