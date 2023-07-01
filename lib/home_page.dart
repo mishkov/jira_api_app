@@ -1,10 +1,12 @@
 import 'dart:developer';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:jira_api/jira_api.dart';
 import 'package:jira_api_app/calculate_button.dart';
 import 'package:jira_api_app/estimation_results_view.dart';
 import 'package:jira_api_app/jql_field.dart';
+import 'package:jira_api_app/local_storage.dart';
 import 'package:jira_api_app/show_message.dart';
 import 'package:jira_api_app/statuses_categories_view.dart';
 import 'package:jira_api_app/statuses_category.dart';
@@ -25,7 +27,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  
   Future<EstimationResults>? _rawResultsFuture;
   Future<EstimationResults>? _results;
   List<StatusesCategory> _statusesCategoris = [
@@ -48,12 +49,34 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  final _jqlController = TextEditingController(
-      text: 'project = "AS" AND labels = "MB" ORDER BY created DESC');
+  final _jqlController = TextEditingController();
   bool _isJqlValid = true;
   String? _jqlError;
 
   var _samplingFrequency = SamplingFrequency.eachWeek;
+
+  String _storyPointsField = 'customfield_10016';
+
+  final _localStorage = LocalStorage();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _initLocalStorage().then((_) {
+      _tryLoadSettingsAndSearchQuery();
+    });
+  }
+
+  Future<void> _initLocalStorage() async {
+    _localStorage.load();
+  }
+
+  Future<void> _tryLoadSettingsAndSearchQuery() async {
+    _storyPointsField = await _localStorage.getStoryPointsField() ?? '';
+    _jqlController.text = await _localStorage.getJqlQuery() ?? '';
+    setState(() {});
+  }
 
   @override
   void dispose() {
@@ -63,6 +86,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchStats() async {
+    _localStorage.putJqlQuery(_jqlController.text);
+
     setState(() {
       _jqlError = null;
     });
@@ -87,6 +112,7 @@ class _HomePageState extends State<HomePage> {
         _jqlController.text,
         weeksAgoCount: 40,
         frequency: _samplingFrequency,
+        storyPointEstimateField: _storyPointsField,
       );
     });
 
@@ -236,6 +262,17 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        SettingsButton(
+                          currentSettings: _storyPointsField,
+                          onSettingsChanged: (settings) async {
+                            setState(() {
+                              _storyPointsField = settings;
+                            });
+
+                            _localStorage.putStoryPointsField(settings);
+                          },
+                        ),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: JqlField(
                             jqlController: _jqlController,
@@ -280,9 +317,26 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   samplingFrequency,
-                  CalculateButton(
-                    onPressed: _fetchStats,
-                    inVerticalOrientation: true,
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        SettingsButton(
+                          currentSettings: _storyPointsField,
+                          onSettingsChanged: (settings) {
+                            setState(() {
+                              _storyPointsField = settings;
+                            });
+                          },
+                        ),
+                        const Text('Доп. Настройки'),
+                        const Spacer(),
+                        CalculateButton(
+                          onPressed: _fetchStats,
+                          inVerticalOrientation: true,
+                        ),
+                      ],
+                    ),
                   ),
                   const Spacer(),
                   statusesCategories,
@@ -299,5 +353,96 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     });
+  }
+}
+
+class SettingsButton extends StatelessWidget {
+  const SettingsButton({
+    super.key,
+    required this.onSettingsChanged,
+    required this.currentSettings,
+  });
+
+  final void Function(String settings) onSettingsChanged;
+  final String currentSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: () async {
+        final settings = await showCupertinoDialog(
+            context: context,
+            builder: (context) {
+              return SettingsDialog(
+                currentSettings: currentSettings,
+              );
+            },
+            barrierDismissible: true);
+
+        if (settings is String) {
+          onSettingsChanged(settings);
+        }
+      },
+      icon: const Icon(Icons.settings),
+    );
+  }
+}
+
+class SettingsDialog extends StatefulWidget {
+  const SettingsDialog({
+    super.key,
+    required this.currentSettings,
+  });
+
+  final String currentSettings;
+
+  @override
+  State<SettingsDialog> createState() => _SettingsDialogState();
+}
+
+class _SettingsDialogState extends State<SettingsDialog> {
+  final _storyPointFieldController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _storyPointFieldController.text = widget.currentSettings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoAlertDialog(
+      title: const Text('Settings'),
+      content: Material(
+        color: Colors.transparent,
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            TextField(
+              controller: _storyPointFieldController,
+              decoration: const InputDecoration(
+                labelText: 'Story Point Field Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text('Отмена'),
+        ),
+        CupertinoDialogAction(
+          onPressed: () {
+            Navigator.of(context).pop(_storyPointFieldController.text);
+          },
+          child: const Text('Применить'),
+        ),
+      ],
+    );
   }
 }

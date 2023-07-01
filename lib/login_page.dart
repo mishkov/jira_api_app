@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:jira_api/jira_api.dart';
 import 'package:jira_api_app/home_page.dart';
+import 'package:jira_api_app/local_storage.dart';
 import 'package:jira_api_app/show_message.dart';
 
 class LoginPage extends StatefulWidget {
@@ -16,23 +16,29 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _loginController = TextEditingController();
   final _apiTokenController = TextEditingController();
+  final _accountNameController = TextEditingController();
 
   bool _isLoading = false;
+  final _localStorage = LocalStorage();
 
   @override
   void initState() {
     super.initState();
 
-    _tryLoadCredentials();
+    _initLocaleStorage().then((_) {
+      _tryLoadCredentials();
+    });
+  }
+
+  Future<void> _initLocaleStorage() async {
+    await _localStorage.load();
   }
 
   Future<void> _tryLoadCredentials() async {
-    await dotenv.load(fileName: 'assets/.env');
-
-    setState(() {
-      _loginController.text = dotenv.env['USER_NAME'] ?? '';
-      _apiTokenController.text = dotenv.env['API_TOKEN'] ?? '';
-    });
+    _loginController.text = await _localStorage.getLogin() ?? '';
+    _apiTokenController.text = await _localStorage.getApiToken() ?? '';
+    _accountNameController.text = await _localStorage.getAccountName() ?? '';
+    setState(() {});
   }
 
   @override
@@ -59,6 +65,14 @@ class _LoginPageState extends State<LoginPage> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _accountNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Имя Jira аккаунта (<your-account>.atlassian.net)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _isLoading
@@ -70,6 +84,7 @@ class _LoginPageState extends State<LoginPage> {
                         final jiraStats = JiraStats(
                           user: _loginController.text,
                           apiToken: _apiTokenController.text,
+                          accountName: _accountNameController.text,
                         );
                         try {
                           await jiraStats.initialize();
@@ -79,6 +94,11 @@ class _LoginPageState extends State<LoginPage> {
                                 HomePage.routeName,
                                 arguments: jiraStats);
                           }
+
+                          _localStorage.putLogin(_loginController.text);
+                          _localStorage.putApiToken(_apiTokenController.text);
+                          _localStorage
+                              .putAccountName(_accountNameController.text);
                         } on UnauthorizedException catch (_) {
                           showMessage(context,
                               'Войти не удалось! Убедитесь, что логин и апи токен указаны верно');

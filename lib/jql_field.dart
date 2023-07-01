@@ -19,7 +19,7 @@ class JqlField extends StatelessWidget {
     return TextField(
       controller: jqlController,
       onSubmitted: (_) {
-        onSubmitted;
+        onSubmitted();
       },
       maxLines: isMultiLine ? null : 1,
       decoration: InputDecoration(
