@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:jira_api_app/statuses_category.dart';
 
@@ -148,6 +149,37 @@ class _StatusesCategoriesViewState extends State<StatusesCategoriesView> {
                         ).toList(),
                       ),
                     ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 16,
+                      onPressed: () async {
+                        final newStatus = await showCupertinoDialog<String>(
+                          context: context,
+                          builder: (context) {
+                            return const AddStatusDialog();
+                          },
+                          barrierDismissible: true,
+                        );
+
+                        if (newStatus == null) {
+                          return;
+                        }
+                        if (newStatus.isEmpty) {
+                          return;
+                        }
+
+                        setState(() {
+                          _updatedCategoris ??=
+                              widget.statusesCategoris.map((e) {
+                            return e.clone();
+                          }).toList();
+                        });
+
+                        _updatedCategoris![index].statusesNames.add(newStatus);
+                      },
+                      icon: const Icon(Icons.add),
+                    ),
                   ],
                 ),
               ),
@@ -185,6 +217,50 @@ class _StatusesCategoriesViewState extends State<StatusesCategoriesView> {
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class AddStatusDialog extends StatefulWidget {
+  const AddStatusDialog({
+    super.key,
+  });
+
+  @override
+  State<AddStatusDialog> createState() => _AddStatusDialogState();
+}
+
+class _AddStatusDialogState extends State<AddStatusDialog> {
+  final _statusNameController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoAlertDialog(
+      title: const Text('New Status'),
+      content: Material(
+        color: Colors.transparent,
+        child: TextField(
+          controller: _statusNameController,
+          decoration: const InputDecoration(
+            labelText: 'Status name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text('Cancel'),
+        ),
+        CupertinoDialogAction(
+          onPressed: () {
+            Navigator.of(context).pop(_statusNameController.text);
+          },
+          child: const Text('Add'),
         ),
       ],
     );
