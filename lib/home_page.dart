@@ -86,6 +86,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchStats() async {
+    if (_storyPointsField.isEmpty) {
+      showMessage(context,
+          'Story points field is required. Please navigate to settings and specify it');
+    }
+
+    try {
+      await widget.jiraStats.validateStoryPoitnsField(_storyPointsField);
+    } on FieldNotFoundException catch (_) {
+      showMessage(context, 'Story points field not found');
+    } on InvalidFieldTypeException catch (_) {
+      showMessage(context, 'Invalid field type. Must be number');
+    } catch (e) {
+      showMessage(context, 'Unexpected error. Cannot verify field');
+    }
+    
     _localStorage.putJqlQuery(_jqlController.text);
 
     setState(() {
@@ -263,6 +278,7 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SettingsButton(
+                          jiraStats: widget.jiraStats,
                           currentSettings: _storyPointsField,
                           onSettingsChanged: (settings) async {
                             setState(() {
@@ -322,6 +338,7 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       children: [
                         SettingsButton(
+                          jiraStats: widget.jiraStats,
                           currentSettings: _storyPointsField,
                           onSettingsChanged: (settings) {
                             setState(() {
@@ -359,10 +376,12 @@ class _HomePageState extends State<HomePage> {
 class SettingsButton extends StatelessWidget {
   const SettingsButton({
     super.key,
+    required this.jiraStats,
     required this.onSettingsChanged,
     required this.currentSettings,
   });
 
+  final JiraStats jiraStats;
   final void Function(String settings) onSettingsChanged;
   final String currentSettings;
 
@@ -374,6 +393,7 @@ class SettingsButton extends StatelessWidget {
             context: context,
             builder: (context) {
               return SettingsDialog(
+                jiraStats: jiraStats,
                 currentSettings: currentSettings,
               );
             },
@@ -391,9 +411,11 @@ class SettingsButton extends StatelessWidget {
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({
     super.key,
+    required this.jiraStats,
     required this.currentSettings,
   });
 
+  final JiraStats jiraStats;
   final String currentSettings;
 
   @override
@@ -402,6 +424,7 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   final _storyPointFieldController = TextEditingController();
+  String? _storyPointFieldError;
 
   @override
   void initState() {
@@ -421,9 +444,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
             const SizedBox(height: 8),
             TextField(
               controller: _storyPointFieldController,
-              decoration: const InputDecoration(
-                labelText: 'Story Point Field Name',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Story Point Field Id',
+                errorText: _storyPointFieldError,
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -437,8 +461,30 @@ class _SettingsDialogState extends State<SettingsDialog> {
           child: const Text('Отмена'),
         ),
         CupertinoDialogAction(
-          onPressed: () {
-            Navigator.of(context).pop(_storyPointFieldController.text);
+          onPressed: () async {
+            try {
+              setState(() {
+                _storyPointFieldError = null;
+              });
+              await widget.jiraStats
+                  .validateStoryPoitnsField(_storyPointFieldController.text);
+
+              if (context.mounted) {
+                Navigator.of(context).pop(_storyPointFieldController.text);
+              }
+            } on FieldNotFoundException catch (_) {
+              setState(() {
+                _storyPointFieldError = 'Field not found';
+              });
+            } on InvalidFieldTypeException catch (_) {
+              setState(() {
+                _storyPointFieldError = 'Invalid field type. Must be number';
+              });
+            } catch (e) {
+              setState(() {
+                _storyPointFieldError = 'Unexpected error. Cannot verify field';
+              });
+            }
           },
           child: const Text('Применить'),
         ),
