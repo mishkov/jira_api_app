@@ -147,9 +147,11 @@ packages:
   jira_api:
     dependency: "direct main"
     description:
-      path: "../jira_api"
-      relative: true
-    source: path
+      path: "."
+      ref: HEAD
+      resolved-ref: "78e8518cfee650a4425a7b8256b30bb6972cf75e"
+      url: "https://github.com/mishkov/jira_api.git"
+    source: git
     version: "1.0.0"
   js:
     dependency: transitive
