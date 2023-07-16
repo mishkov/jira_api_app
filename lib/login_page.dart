@@ -1,4 +1,7 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:jira_api/jira_api.dart';
 import 'package:jira_api_app/home_page.dart';
 import 'package:jira_api_app/local_storage.dart';
@@ -87,7 +90,11 @@ class _LoginPageState extends State<LoginPage> {
                           accountName: _accountNameController.text,
                         );
                         try {
-                          await jiraStats.initialize();
+                          // await http.get(Uri.parse('http://www.google.com'));
+
+                          await jiraStats.initialize(
+                            client: MyClient(),
+                          );
 
                           if (context.mounted) {
                             Navigator.of(context).popAndPushNamed(
@@ -103,9 +110,13 @@ class _LoginPageState extends State<LoginPage> {
                           showMessage(context,
                               'Войти не удалось! Убедитесь, что логин и апи токен указаны верно');
                         } catch (e) {
-                          if (context.mounted) {}
-                          showMessage(
-                              context, 'Войти не удалось! Неизвестная ошибка');
+                          if (context.mounted) {
+                            log(
+                              'error: $e. Strack Trace is ${StackTrace.current}',
+                            );
+                            showMessage(context,
+                                'Войти не удалось! Неизвестная ошибка');
+                          }
                         } finally {
                           setState(() {
                             _isLoading = false;
@@ -114,10 +125,50 @@ class _LoginPageState extends State<LoginPage> {
                       },
                 child: const Text('Войти'),
               ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  var url = Uri.parse('https://www.google.com');
+                  var response = await http.get(url);
+
+                  if (response.statusCode == 200) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('OK!'),
+                    ));
+                    // Successful API call
+                    var data = response.body;
+                    // Process the response data
+                    // ...
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('FAIL!'),
+                    ));
+                    // Handle error
+                    print(
+                        'Request failed with status: ${response.statusCode}.');
+                  }
+                },
+                child: const Text('Test api call'),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class MyClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.headers['Access-Control-Allow-Origin'] = '*';
+    request.headers['Access-Control-Allow-Credentials'] = 'true';
+    request.headers['Access-Control-Allow-Headers'] =
+        'Origin,Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,locale';
+    request.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
+    request.headers['X-Atlassian-Token'] = 'no-check';
+
+    //X-Atlassian-Token
+    return http.Client().send(request);
   }
 }

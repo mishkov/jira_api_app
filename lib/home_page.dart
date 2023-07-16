@@ -119,7 +119,16 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _jqlError = null;
     });
-    final errors = await widget.jiraStats.validateJql(_jqlController.text);
+    final List<String> errors;
+    try {
+      errors = await widget.jiraStats.validateJql(_jqlController.text);
+    } catch (e) {
+      if (context.mounted) {
+        showMessage(context, 'Unexpected error. cannot validate jql');
+      }
+
+      return;
+    }
 
     setState(() {
       _isJqlValid = errors.isEmpty;

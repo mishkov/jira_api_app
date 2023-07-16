@@ -1,25 +1,32 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "jira_api_app",
-            "request": "launch",
-            "type": "dart"
-        },
-        {
-            "name": "jira_api_app (profile mode)",
-            "request": "launch",
-            "type": "dart",
-            "flutterMode": "profile"
-        },
-        {
-            "name": "jira_api_app (release mode)",
-            "request": "launch",
-            "type": "dart",
-            "flutterMode": "release"
-        }
-    ]
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "jira_api_app",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "jira_api_app (profile mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile"
+    },
+    {
+      "name": "jira_api_app (release mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release"
+    },
+    {
+      "name": "jira_api_app with no security",
+      "request": "launch",
+      "args": ["--web-browser-flag", "--disable-web-security"],
+      "type": "dart",
+    }
+    //--web-browser-flag "--disable-web-security"
+  ]
 }
