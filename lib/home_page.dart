@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:jira_api/jira_api.dart';
@@ -10,15 +13,14 @@ import 'package:jira_api_app/statuses_categories_view.dart';
 import 'package:jira_api_app/statuses_category.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:http/http.dart' as http;
+
 class HomePage extends StatefulWidget {
   static const routeName = '/home';
 
   const HomePage({
     super.key,
-    required this.jiraStats,
   });
-
-  final JiraStats jiraStats;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -86,8 +88,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     super.dispose();
-
-    widget.jiraStats.dispose();
   }
 
   Future<void> _fetchStats() async {
@@ -99,15 +99,25 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      await widget.jiraStats.validateStoryPoitnsField(_storyPointsField);
-    } on FieldNotFoundException catch (_) {
-      showMessage(context, 'Story points field not found');
+      final response = await http.post(
+        Uri.parse('http://80.78.245.114:8080/check-story-points-field'),
+        body: jsonEncode({
+          "user": await _localStorage.getLogin(),
+          "token": await _localStorage.getApiToken(),
+          "account": await _localStorage.getAccountName(),
+          "field": _storyPointsField,
+        }),
+        headers: {
+          HttpHeaders.contentTypeHeader: 'application/json',
+        },
+      );
 
-      return;
-    } on InvalidFieldTypeException catch (_) {
-      showMessage(context, 'Invalid field type. Must be number');
-
-      return;
+      var message = jsonDecode(response.body)['message'];
+      if (message != 'Field is valid') {
+        if (context.mounted) {
+          showMessage(context, message);
+        }
+      }
     } catch (e) {
       showMessage(context, 'Unexpected error. Cannot verify field');
 
@@ -119,9 +129,30 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _jqlError = null;
     });
-    final List<String> errors;
+    List<String> errors = [];
     try {
-      errors = await widget.jiraStats.validateJql(_jqlController.text);
+      final response = await http.post(
+        Uri.parse('http://80.78.245.114:8080/validate-jql'),
+        body: jsonEncode({
+          "user": await _localStorage.getLogin(),
+          "token": await _localStorage.getApiToken(),
+          "account": await _localStorage.getAccountName(),
+          "jql": _jqlController.text,
+        }),
+        headers: {
+          HttpHeaders.contentTypeHeader: 'application/json',
+        },
+      );
+
+      var decodedBody = jsonDecode(response.body);
+      var message = decodedBody['message'];
+      if (message != 'JQL is valid') {
+        errors = decodedBody['errors']['jql'];
+
+        if (context.mounted) {
+          showMessage(context, message);
+        }
+      }
     } catch (e) {
       if (context.mounted) {
         showMessage(context, 'Unexpected error. cannot validate jql');
@@ -144,13 +175,40 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    final responseFuture = http.post(
+      Uri.parse('http://80.78.245.114:8080/stats'),
+      body: jsonEncode({
+        "user": await _localStorage.getLogin(),
+        "token": await _localStorage.getApiToken(),
+        "account": await _localStorage.getAccountName(),
+        "jql": _jqlController.text,
+        "field": _storyPointsField,
+        "weeksAgoCount": 40,
+        "frequency": _samplingFrequency.toString(),
+      }),
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+      },
+    );
+
     setState(() {
-      _rawResultsFuture = widget.jiraStats.getTotalEstimationByJql(
-        _jqlController.text,
-        weeksAgoCount: 40,
-        frequency: _samplingFrequency,
-        storyPointEstimateField: _storyPointsField,
+      _rawResultsFuture = responseFuture.then<EstimationResults>(
+        (response) {
+          if (response.statusCode != 200) {
+            throw Exception(
+                'response.statusCode != 200: ${response.statusCode}');
+          }
+
+          return EstimationResults.fromJson(response.body);
+        },
       );
+
+      // _rawResultsFuture = widget.jiraStats.getTotalEstimationByJql(
+      //   _jqlController.text,
+      //   weeksAgoCount: ,
+      //   frequency: _samplingFrequency,
+      //   storyPointEstimateField: _storyPointsField,
+      // );
     });
 
     await _groupEstimationByCategories();
@@ -360,7 +418,6 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SettingsButton(
-                          jiraStats: widget.jiraStats,
                           currentSettings: _storyPointsField,
                           onSettingsChanged: (settings) async {
                             setState(() {
@@ -421,7 +478,6 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       children: [
                         SettingsButton(
-                          jiraStats: widget.jiraStats,
                           currentSettings: _storyPointsField,
                           onSettingsChanged: (settings) {
                             setState(() {
@@ -460,12 +516,10 @@ class _HomePageState extends State<HomePage> {
 class SettingsButton extends StatelessWidget {
   const SettingsButton({
     super.key,
-    required this.jiraStats,
     required this.onSettingsChanged,
     required this.currentSettings,
   });
 
-  final JiraStats jiraStats;
   final void Function(String settings) onSettingsChanged;
   final String currentSettings;
 
@@ -477,7 +531,6 @@ class SettingsButton extends StatelessWidget {
             context: context,
             builder: (context) {
               return SettingsDialog(
-                jiraStats: jiraStats,
                 currentSettings: currentSettings,
               );
             },
@@ -495,11 +548,9 @@ class SettingsButton extends StatelessWidget {
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({
     super.key,
-    required this.jiraStats,
     required this.currentSettings,
   });
 
-  final JiraStats jiraStats;
   final String currentSettings;
 
   @override
@@ -510,11 +561,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
   final _storyPointFieldController = TextEditingController();
   String? _storyPointFieldError;
 
+  final _localStorage = LocalStorage();
+
   @override
   void initState() {
     super.initState();
 
     _storyPointFieldController.text = widget.currentSettings;
+
+    _initLocalStorage();
+  }
+
+  Future<void> _initLocalStorage() async {
+    _localStorage.load();
   }
 
   @override
@@ -546,28 +605,40 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
         CupertinoDialogAction(
           onPressed: () async {
+            setState(() {
+              _storyPointFieldError = null;
+            });
             try {
-              setState(() {
-                _storyPointFieldError = null;
-              });
-              await widget.jiraStats
-                  .validateStoryPoitnsField(_storyPointFieldController.text);
+              final response = await http.post(
+                Uri.parse('http://80.78.245.114:8080/check-story-points-field'),
+                body: jsonEncode({
+                  "user": await _localStorage.getLogin(),
+                  "token": await _localStorage.getApiToken(),
+                  "account": await _localStorage.getAccountName(),
+                  "field": _storyPointFieldController.text,
+                }),
+                headers: {
+                  HttpHeaders.contentTypeHeader: 'application/json',
+                },
+              );
+
+              var message = jsonDecode(response.body)['message'];
+              if (message != 'Field is valid') {
+                setState(() {
+                  _storyPointFieldError = message;
+                });
+
+                return;
+              }
 
               if (context.mounted) {
                 Navigator.of(context).pop(_storyPointFieldController.text);
               }
-            } on FieldNotFoundException catch (_) {
-              setState(() {
-                _storyPointFieldError = 'Field not found';
-              });
-            } on InvalidFieldTypeException catch (_) {
-              setState(() {
-                _storyPointFieldError = 'Invalid field type. Must be number';
-              });
             } catch (e) {
               setState(() {
                 _storyPointFieldError = 'Unexpected error. Cannot verify field';
               });
+              return;
             }
           },
           child: const Text('Применить'),

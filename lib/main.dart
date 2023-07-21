@@ -18,11 +18,10 @@ class MainApp extends StatelessWidget {
         LoginPage.routeName: (context) => const LoginPage(),
       },
       onGenerateRoute: (settings) {
-
         if (settings.name == HomePage.routeName) {
           return MaterialPageRoute(
             builder: (context) {
-              return HomePage(jiraStats: settings.arguments as JiraStats);
+              return const HomePage();
             },
           );
         } else {

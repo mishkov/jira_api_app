@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -84,22 +86,33 @@ class _LoginPageState extends State<LoginPage> {
                         setState(() {
                           _isLoading = true;
                         });
-                        final jiraStats = JiraStats(
-                          user: _loginController.text,
-                          apiToken: _apiTokenController.text,
-                          accountName: _accountNameController.text,
-                        );
-                        try {
-                          // await http.get(Uri.parse('http://www.google.com'));
 
-                          await jiraStats.initialize(
-                            client: MyClient(),
+                        try {
+                          final response = await http.post(
+                            Uri.parse(
+                                'http://80.78.245.114:8080/check-credentials'),
+                            body: jsonEncode({
+                              "user": _loginController.text,
+                              "token": _apiTokenController.text,
+                              "account": _accountNameController.text,
+                            }),
+                            headers: {
+                              HttpHeaders.contentTypeHeader: 'application/json',
+                            },
                           );
+
+                          if (response.statusCode == 401) {
+                            throw UnauthorizedException();
+                          }
+
+                          if (response.statusCode != 200) {
+                            throw Exception();
+                          }
 
                           if (context.mounted) {
                             Navigator.of(context).popAndPushNamed(
-                                HomePage.routeName,
-                                arguments: jiraStats);
+                              HomePage.routeName,
+                            );
                           }
 
                           _localStorage.putLogin(_loginController.text);
@@ -124,31 +137,6 @@ class _LoginPageState extends State<LoginPage> {
                         }
                       },
                 child: const Text('Войти'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  var url = Uri.parse('https://www.google.com');
-                  var response = await http.get(url);
-
-                  if (response.statusCode == 200) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('OK!'),
-                    ));
-                    // Successful API call
-                    var data = response.body;
-                    // Process the response data
-                    // ...
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('FAIL!'),
-                    ));
-                    // Handle error
-                    print(
-                        'Request failed with status: ${response.statusCode}.');
-                  }
-                },
-                child: const Text('Test api call'),
               ),
             ],
           ),

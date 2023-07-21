@@ -149,7 +149,7 @@ packages:
     description:
       path: "."
       ref: HEAD
-      resolved-ref: "78e8518cfee650a4425a7b8256b30bb6972cf75e"
+      resolved-ref: e18f9deb6cb48df03caf2405cfeb62c12a2788dd
       url: "https://github.com/mishkov/jira_api.git"
     source: git
     version: "1.0.0"
