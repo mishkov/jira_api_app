@@ -90,7 +90,7 @@ class _LoginPageState extends State<LoginPage> {
                         try {
                           final response = await http.post(
                             Uri.parse(
-                                'http://80.78.245.114:8080/check-credentials'),
+                                'https://jira.mishkov.space/check-credentials'),
                             body: jsonEncode({
                               "user": _loginController.text,
                               "token": _apiTokenController.text,

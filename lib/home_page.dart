@@ -100,7 +100,7 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://80.78.245.114:8080/check-story-points-field'),
+        Uri.parse('https://jira.mishkov.space/check-story-points-field'),
         body: jsonEncode({
           "user": await _localStorage.getLogin(),
           "token": await _localStorage.getApiToken(),
@@ -132,7 +132,7 @@ class _HomePageState extends State<HomePage> {
     List<String> errors = [];
     try {
       final response = await http.post(
-        Uri.parse('http://80.78.245.114:8080/validate-jql'),
+        Uri.parse('https://jira.mishkov.space/validate-jql'),
         body: jsonEncode({
           "user": await _localStorage.getLogin(),
           "token": await _localStorage.getApiToken(),
@@ -176,7 +176,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     final responseFuture = http.post(
-      Uri.parse('http://80.78.245.114:8080/stats'),
+      Uri.parse('https://jira.mishkov.space/stats'),
       body: jsonEncode({
         "user": await _localStorage.getLogin(),
         "token": await _localStorage.getApiToken(),
@@ -610,7 +610,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
             });
             try {
               final response = await http.post(
-                Uri.parse('http://80.78.245.114:8080/check-story-points-field'),
+                Uri.parse(
+                    'https://jira.mishkov.space/check-story-points-field'),
                 body: jsonEncode({
                   "user": await _localStorage.getLogin(),
                   "token": await _localStorage.getApiToken(),
